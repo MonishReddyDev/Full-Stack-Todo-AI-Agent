@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Todo Assistant</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configure Tailwind for Inter font and light mode aesthetics -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+            },
+            colors: {
+              "primary-blue": "#4285F4",
+              "light-bg": "#f5f7fa",
+              "card-bg": "#ffffff",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap");
+      /* Subtle background gradient to match the screenshot's soft light theme */
+      body {
+        background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
+      }
+      .chat-container {
+        /* Fix height for chat scroll area */
+        max-height: 70vh;
+        overflow-y: auto;
+        /* Scrollbar styling for a cleaner look */
+        scrollbar-width: thin;
+        scrollbar-color: #cbd5e1 #f0f4f8;
+      }
+      .chat-container::-webkit-scrollbar {
+        width: 8px;
+      }
+      .chat-container::-webkit-scrollbar-thumb {
+        background-color: #cbd5e1;
+        border-radius: 10px;
+      }
+      /* Custom styles to make the Markdown lists look clean inside the bubble */
+      .agent-output ol,
+      .agent-output ul {
+        padding-left: 1.5rem; /* Add indentation for lists */
+        margin-top: 0.5rem;
+        margin-bottom: 0.5rem;
+      }
+      .agent-output li {
+        margin-bottom: 0.25rem;
+      }
+      .agent-output strong {
+        font-weight: 600; /* Ensure strong is visually distinct */
+      }
+    </style>
+  </head>
+  <body class="font-sans flex items-center justify-center min-h-screen p-4">
+    <div
+      class="w-full max-w-lg shadow-2xl rounded-3xl overflow-hidden bg-card-bg transition-all duration-300 transform hover:shadow-primary-blue/30"
+    >
+      <!-- Header -->
+      <header
+        class="flex justify-between items-center bg-primary-blue text-white p-4 rounded-t-3xl shadow-md"
+      >
+        <h1 class="text-xl font-semibold">AI Todo Assistant</h1>
+        <!-- Menu Icon -->
+        <button
+          class="p-1 rounded hover:bg-white/20 transition-colors"
+          aria-label="Menu"
+        >
+          <svg
+            class="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 6h16M4 12h16M4 18h16"
+            ></path>
+          </svg>
+        </button>
+      </header>
+
+      <!-- Chat Area -->
+      <div
+        id="chat-container"
+        class="chat-container p-4 flex flex-col space-y-4"
+      >
+        <!-- Initial Agent Message (Welcome) -->
+        <div class="flex justify-start">
+          <div
+            class="bg-primary-blue/10 text-gray-800 p-3 rounded-xl rounded-tl-none max-w-xs shadow-sm agent-output"
+          >
+            <p class="font-medium text-primary-blue">AI Todo Assistant</p>
+            <p class="mt-1">
+              👋 Hi! I'm your AI Todo Assistant. How can I help today?
+            </p>
+          </div>
+        </div>
+
+        <!-- Loading Indicator (Hidden by default) -->
+        <div id="loading-indicator" class="flex justify-start hidden">
+          <div
+            class="bg-gray-200 p-3 rounded-xl rounded-tl-none max-w-xs shadow-sm"
+          >
+            <div class="flex items-center space-x-2">
+              <div
+                class="h-3 w-3 bg-primary-blue rounded-full animate-bounce delay-100"
+              ></div>
+              <div
+                class="h-3 w-3 bg-primary-blue rounded-full animate-bounce delay-200"
+              ></div>
+              <div
+                class="h-3 w-3 bg-primary-blue rounded-full animate-bounce delay-300"
+              ></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input Box -->
+      <div class="p-4 border-t border-gray-100">
+        <div
+          class="flex items-center bg-light-bg rounded-xl shadow-inner p-1 transition duration-200 focus-within:ring-2 focus-within:ring-primary-blue/50"
+        >
+          <input
+            id="message-input"
+            type="text"
+            placeholder="Type a command or message..."
+            class="flex-grow bg-transparent border-none focus:outline-none text-gray-700 py-3 px-3 placeholder-gray-400"
+          />
+          <button
+            id="send-button"
+            class="bg-primary-blue text-white p-3 m-1 rounded-xl transition duration-200 hover:bg-primary-blue/90 shadow-lg active:scale-95"
+            aria-label="Send message"
+          >
+            <svg
+              class="w-5 h-5"
+              fill="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const chatContainer = document.getElementById("chat-container");
+      const inputField = document.getElementById("message-input");
+      const sendButton = document.getElementById("send-button");
+      const loadingIndicator = document.getElementById("loading-indicator");
+
+      /**
+       * Converts simple Markdown elements in the agent response to HTML.
+       * This function implements a basic, sequential Markdown-to-HTML transformation.
+       * @param {string} text
+       * @returns {string} HTML formatted text
+       */
+      function formatAgentText(text) {
+        let formattedText = text;
+
+        // 1. Basic Formatting: Bold, Italic, and Line Breaks (must be first)
+        // Bold: **text** -> <strong>text</strong>
+        formattedText = formattedText.replace(
+          /\*\*(.*?)\*\*/g,
+          "<strong>$1</strong>"
+        );
+        // Italic: *text* -> <em>text</em>
+        formattedText = formattedText.replace(/\*(.*?)\*/g, "<em>$1</em>");
+        // Newlines to Temporary Placeholder (to prevent them from interfering with list detection)
+        formattedText = formattedText.replace(/\n/g, "@@NEWLINE@@");
+
+        // 2. Complex Structure: Lists (Must be handled line-by-line)
+        const lines = formattedText.split("@@NEWLINE@@");
+        let isNumberedList = false;
+        let isBulletedList = false;
+        let htmlContent = [];
+
+        for (let i = 0; i < lines.length; i++) {
+          let line = lines[i].trim();
+
+          // Numbered List Item detection (e.g., 1., 2.)
+          if (line.match(/^\d+\.\s/)) {
+            // Start of a new numbered list
+            if (!isNumberedList) {
+              htmlContent.push("<ol>");
+              isNumberedList = true;
+              isBulletedList = false;
+            }
+            // Remove the number and period and wrap in <li>
+            line = line.replace(/^\d+\.\s/, "<li>") + "</li>";
+            htmlContent.push(line);
+          }
+          // Bullet List Item detection (e.g., -, *, +)
+          else if (line.match(/^[\-\*\+]\s/)) {
+            // Start of a new bulleted list
+            if (!isBulletedList) {
+              htmlContent.push("<ul>");
+              isBulletedList = true;
+              isNumberedList = false;
+            }
+            // Remove the bullet and wrap in <li>
+            line = line.replace(/^[\-\*\+]\s/, "<li>") + "</li>";
+            htmlContent.push(line);
+          } else {
+            // End previous list if one was open
+            if (isNumberedList) {
+              htmlContent.push("</ol>");
+              isNumberedList = false;
+            }
+            if (isBulletedList) {
+              htmlContent.push("</ul>");
+              isBulletedList = false;
+            }
+            // Replace placeholder back with <br> for non-list content (or just keep the line)
+            if (line) {
+              // Convert the remaining temporary newline placeholder to <br> for spacing
+              htmlContent.push(line.replace(/@@NEWLINE@@/g, "<br>"));
+            }
+          }
+        }
+
+        // Close any remaining open lists
+        if (isNumberedList) htmlContent.push("</ol>");
+        if (isBulletedList) htmlContent.push("</ul>");
+
+        formattedText = htmlContent.join("");
+
+        // 3. Status Emojis (Optional but good practice)
+        // Use spans to color the status consistently.
+        formattedText = formattedText.replace(
+          "(❌ Not Completed)",
+          '<span class="text-red-600 font-medium"> (❌ Not Completed)</span>'
+        );
+
+        // If the text is not a list, re-introduce line breaks for paragraphs that were split
+        if (
+          formattedText.indexOf("<ol>") === -1 &&
+          formattedText.indexOf("<ul>") === -1
+        ) {
+          formattedText = text.replace(/\n/g, "<br>");
+        }
+
+        return formattedText;
+      }
+
+      /**
+       * Adds a message bubble to the chat container.
+       * @param {string} text - The content of the message.
+       * @param {string} sender - 'user' or 'agent'.
+       * @param {string} title - The title/name to display (only for agent).
+       */
+      function addMessage(text, sender, title = "AI Todo Assistant") {
+        const messageDiv = document.createElement("div");
+        messageDiv.className = `flex ${
+          sender === "user" ? "justify-end" : "justify-start"
+        }`;
+
+        const bubble = document.createElement("div");
+        // User styles
+        if (sender === "user") {
+          bubble.className =
+            "bg-primary-blue text-white p-3 rounded-xl rounded-br-none max-w-xs shadow-lg";
+        }
+        // Agent styles
+        else {
+          // IMPORTANT: Added agent-output class for custom CSS list styling
+          bubble.className =
+            "bg-primary-blue/10 text-gray-800 p-3 rounded-xl rounded-tl-none max-w-full shadow-sm agent-output";
+          const titleElement = document.createElement("p");
+          titleElement.className = "font-medium text-primary-blue mb-1";
+          titleElement.textContent = title;
+          bubble.appendChild(titleElement);
+        }
+
+        const textElement = document.createElement("div"); // Changed to <div> to contain lists properly
+        // CRITICAL CHANGE: Use the new formatting function
+        textElement.innerHTML =
+          sender === "agent" ? formatAgentText(text) : text;
+
+        bubble.appendChild(textElement);
+
+        messageDiv.appendChild(bubble);
+        chatContainer.appendChild(messageDiv);
+
+        // Scroll to the bottom
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      }
+
+      /**
+       * Communicates with the backend Agent API.
+       * The agent is expected to handle commands like "create todo: Buy milk" or "delete task 5"
+       */
+      async function sendMessage() {
+        const prompt = inputField.value.trim();
+        if (prompt === "") return;
+
+        // 1. Add user message to chat and clear input
+        addMessage(prompt, "user");
+        inputField.value = "";
+
+        // 2. Show loading indicator
+        loadingIndicator.classList.remove("hidden");
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+
+        try {
+          // The API endpoint for the agent
+          const apiUrl = "/api/agent";
+
+          const response = await fetch(apiUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            // Send the data with the 'message' key, as suggested by your React code
+            body: JSON.stringify({ message: prompt }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+          }
+
+          const data = await response.json();
+
+          // 3. Process and display the agent's response
+          // CRITICAL FIX: Look for data.output first, then fallback to data.response,
+          // as indicated by your suggested API response structure.
+          const agentResponse =
+            data.output ||
+            data.response ||
+            "Agent executed the command, but no response text was returned.";
+
+          addMessage(agentResponse, "agent");
+        } catch (error) {
+          console.error("Agent API Error:", error);
+          addMessage(
+            `❌ Server error. Please check the console for API details.`,
+            "agent"
+          );
+        } finally {
+          // 4. Hide loading indicator
+          loadingIndicator.classList.add("hidden");
+        }
+      }
+
+      // --- Event Listeners ---
+
+      // Enter key press
+      inputField.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          sendMessage();
+        }
+      });
+
+      // Send button click
+      sendButton.addEventListener("click", sendMessage);
+    </script>
+  </body>
+</html>
