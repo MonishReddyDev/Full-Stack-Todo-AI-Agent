@@ -28,8 +28,8 @@ connectDB();
 // --- Rate Limiter for /api/agent --- //
 const agentLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
-    max: 2, // Limit each IP to 2 requests per window
-    message: { error: "❌ Out of tokens. Please wait 1 hour before trying again." },
+    max: 5, // Limit each IP to 2 requests per window
+    message: { error: "Sorry,Out of tokens. Please wait 1 hour before trying again." },
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false,   // Disable `X-RateLimit-*` headers
 });
