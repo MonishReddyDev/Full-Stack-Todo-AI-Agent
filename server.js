@@ -6,7 +6,7 @@ import todoRoutes from './routes/todoRoutes.js'
 import cors from "cors";
 import agentRoutes from "./routes/AgentRoute.js"
 import path from "path";
-
+import rateLimit from "express-rate-limit";
 
 
 const __dirname = path.resolve();
@@ -25,12 +25,21 @@ app.use(express.json());
 // Connect to MongoDB
 connectDB();
 
+// --- Rate Limiter for /api/agent --- //
+const agentLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 2, // Limit each IP to 2 requests per window
+    message: { error: "❌ Out of tokens. Please wait 1 hour before trying again." },
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false,   // Disable `X-RateLimit-*` headers
+});
+
 app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 // Routes
-app.use("/api/agent", agentRoutes);
+app.use("/api/agent", agentLimiter, agentRoutes);
 
 
 
